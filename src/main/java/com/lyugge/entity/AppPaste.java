@@ -1,5 +1,6 @@
 package com.lyugge.entity;
 
+import com.lyugge.api.enums.Access;
 import lombok.*;
 import org.hibernate.Hibernate;
 
@@ -20,5 +21,6 @@ public class AppPaste {
     private long id;
     private String text;
     private String cancelDate;
-    private String access;
+    @Enumerated(EnumType.STRING)
+    private Access access;
 }

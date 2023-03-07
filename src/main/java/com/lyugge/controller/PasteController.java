@@ -27,6 +27,6 @@ public class PasteController {
 
     @PostMapping("/push")
     public String pushPaste(@RequestBody RawPaste rawPaste) {
-        return rawPaste.getText();
+        return pasteService.pushPaste(rawPaste);
     }
 }

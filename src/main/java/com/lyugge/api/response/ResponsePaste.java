@@ -1,11 +1,14 @@
 package com.lyugge.api.response;
 
-import lombok.Builder;
-import lombok.Data;
+import com.lyugge.api.enums.Access;
+import lombok.*;
 
+@Getter
+@Setter
 @Builder
-@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class ResponsePaste {
     private String text;
-    private String access;
+    private Access access;
 }

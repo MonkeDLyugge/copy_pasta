@@ -2,11 +2,13 @@ package com.lyugge.api.request;
 
 import com.lyugge.api.enums.Access;
 import com.lyugge.api.enums.ExpirationTime;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
+@Getter
+@Setter
 @Builder
-@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class RawPaste {
     String text;
     ExpirationTime time;

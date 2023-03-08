@@ -16,7 +16,9 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static com.lyugge.api.enums.Access.*;
 import static com.lyugge.api.enums.ExpirationTime.*;
@@ -39,8 +41,14 @@ public class PasteServiceImpl implements PasteService {
         long id = cryptoTool.idOf(hash);
         var paste = pasteDao.findById(id);
         if (paste.isPresent()) {
-            //TODO check cancelDate
-            return getResponsePaste(paste.get());
+            if (paste.get().getCancelDate().isAfter(LocalDateTime.now())) {
+                return getResponsePaste(paste.get());
+            } else {
+                //TODO process that paste cancel date has come
+                log.debug(String.format("Cancel date of paste with hash(%s) has come",
+                        hash));
+                return ResponsePaste.builder().build();
+            }
         } else {
             //TODO process that paste may not be found
             log.error("Can't find paste with hash: " + hash);
@@ -57,7 +65,15 @@ public class PasteServiceImpl implements PasteService {
 
     @Override
     public List<ResponsePaste> getLastTenPastes() {
-        return null;
+        var listOfPastes = pasteDao.findAllByAccess(PUBLIC);
+        int pastesLimit = 10;
+        return listOfPastes.stream()
+                .filter(appPaste -> appPaste.getCancelDate().isAfter(LocalDateTime.now()))
+                .sorted(Comparator.comparing(AppPaste::getId).reversed())
+                .limit(pastesLimit)
+                .map(this::getResponsePaste)
+                .collect(Collectors.toList());
+
     }
 
     @Override
@@ -77,9 +93,8 @@ public class PasteServiceImpl implements PasteService {
                 .build();
     }
 
-    private String getCancelDate(ExpirationTime time) {
+    private LocalDateTime getCancelDate(ExpirationTime time) {
         var now = LocalDateTime.of(LocalDate.now(), LocalTime.now());
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         LocalDateTime cancelDate = null;
         switch(time) {
             case TEN_MIN: {
@@ -111,7 +126,7 @@ public class PasteServiceImpl implements PasteService {
             //TODO check if time is not in enum
             log.error("Can't serialize time paste need to save");
         }
-        return cancelDate.format(formatter);
+        return cancelDate;
     }
 }
 //    String str = "1986-04-08 12:30";

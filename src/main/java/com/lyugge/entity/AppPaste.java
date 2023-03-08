@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.Hibernate;
 
 import javax.persistence.*;
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 @Getter
@@ -20,7 +21,7 @@ public class AppPaste {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
     private String text;
-    private String cancelDate;
+    private LocalDateTime cancelDate;
     @Enumerated(EnumType.STRING)
     private Access access;
 }

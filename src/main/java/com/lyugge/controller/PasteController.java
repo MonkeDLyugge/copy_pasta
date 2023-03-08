@@ -5,7 +5,7 @@ import com.lyugge.api.response.ResponsePaste;
 import com.lyugge.service.PasteService;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
+import java.util.List;
 
 @RestController
 public class PasteController {
@@ -21,8 +21,8 @@ public class PasteController {
     }
 
     @GetMapping("/get_last_pastes")
-    public ArrayList<String> getLastTenPastes() {
-        return new ArrayList<>();
+    public List<ResponsePaste> getLastTenPastes() {
+        return pasteService.getLastTenPastes();
     }
 
     @PostMapping("/push")

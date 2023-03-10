@@ -1,10 +1,14 @@
 package com.lyugge.service.impl;
 
+import com.lyugge.api.enums.Access;
 import com.lyugge.api.enums.ExpirationTime;
-import com.lyugge.dao.PasteDao;
-import com.lyugge.entity.AppPaste;
 import com.lyugge.api.request.RawPaste;
 import com.lyugge.api.response.ResponsePaste;
+import com.lyugge.dao.PasteDao;
+import com.lyugge.entity.AppPaste;
+import com.lyugge.exceptions.ExpirationTimeExceededException;
+import com.lyugge.exceptions.PasteNotFoundException;
+import com.lyugge.exceptions.WrongArgumentException;
 import com.lyugge.service.PasteService;
 import com.lyugge.utils.CryptoTool;
 import lombok.extern.log4j.Log4j;
@@ -14,20 +18,18 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
-
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static com.lyugge.api.enums.Access.*;
-import static com.lyugge.api.enums.ExpirationTime.*;
+import static com.lyugge.api.enums.Access.PUBLIC;
 
 @Log4j
 @Service
 public class PasteServiceImpl implements PasteService {
     private final CryptoTool cryptoTool;
     private final PasteDao pasteDao;
+
     @Value("${service.url}")
     private String serviceURL;
 
@@ -38,21 +40,19 @@ public class PasteServiceImpl implements PasteService {
 
     @Override
     public ResponsePaste getPaste(String hash) {
-        long id = cryptoTool.idOf(hash);
-        var paste = pasteDao.findById(id);
-        if (paste.isPresent()) {
-            if (paste.get().getCancelDate().isAfter(LocalDateTime.now())) {
-                return getResponsePaste(paste.get());
-            } else {
-                //TODO process that paste cancel date has come
-                log.debug(String.format("Cancel date of paste with hash(%s) has come",
-                        hash));
-                return ResponsePaste.builder().build();
-            }
+        var id = cryptoTool.idOf(hash);
+        if (id == null) {
+            throw new PasteNotFoundException(
+                    String.format("Paste with hash %s has not found.", hash));
+        }
+        var paste = pasteDao.findById(id).
+                orElseThrow(() -> new PasteNotFoundException(
+                        String.format("Paste with hash %s has not found.", hash)));
+        if (paste.getCancelDate().isAfter(LocalDateTime.now())) {
+            return getResponsePaste(paste);
         } else {
-            //TODO process that paste may not be found
-            log.error("Can't find paste with hash: " + hash);
-            return ResponsePaste.builder().build();
+            throw new ExpirationTimeExceededException(
+                    String.format("Expiration time of paste with hash %s has exceeded.", hash));
         }
     }
 
@@ -73,67 +73,61 @@ public class PasteServiceImpl implements PasteService {
                 .limit(pastesLimit)
                 .map(this::getResponsePaste)
                 .collect(Collectors.toList());
-
     }
 
     @Override
     public String pushPaste(RawPaste rawPaste) {
         var transientPaste = getNewAppPaste(rawPaste);
+
         var persistentPaste = pasteDao.save(transientPaste);
         String hash = cryptoTool.hashOf(persistentPaste.getId());
-        String uri = serviceURL + hash;
-        return uri;
+        return serviceURL + hash;
     }
 
     private AppPaste getNewAppPaste(RawPaste rawPaste) {
         return AppPaste.builder()
                 .text(rawPaste.getText())
                 .cancelDate(getCancelDate(rawPaste.getTime()))
-                .access(rawPaste.getAccess())
+                .access(convertToAccess(rawPaste.getAccess()))
                 .build();
     }
 
-    private LocalDateTime getCancelDate(ExpirationTime time) {
+    private Access convertToAccess(String access) {
+        Access eAccess;
+        try {
+            eAccess = Access.valueOf(access.toUpperCase());
+        } catch(IllegalArgumentException e) {
+            throw new WrongArgumentException("Wrong access argument, try " +
+                    "PUBLIC or PRIVATE");
+        }
+        return eAccess;
+    }
+
+    private LocalDateTime getCancelDate(String time) {
         var now = LocalDateTime.of(LocalDate.now(), LocalTime.now());
         LocalDateTime cancelDate = null;
-        switch(time) {
-            case TEN_MIN: {
-                cancelDate = now.plusMinutes(10);
-                break;
-            }
-            case HOUR: {
-                cancelDate = now.minusHours(1);
-                break;
-            }
-            case THREE_HOURS: {
-                cancelDate = now.plusHours(3);
-                break;
-            }
-            case DAY: {
-                cancelDate = now.plusDays(1);
-                break;
-            }
-            case WEEK: {
-                cancelDate = now.plusWeeks(1);
-                break;
-            }
-            case MONTH: {
-                cancelDate = now.plusMonths(1);
-                break;
-            }
-        }
-        if (cancelDate == null) {
-            //TODO check if time is not in enum
-            log.error("Can't serialize time paste need to save");
+
+        ExpirationTime eTime = convertToExpirationTime(time);
+
+        switch (eTime) {
+            case TEN_MIN -> cancelDate = now.plusMinutes(10);
+            case HOUR -> cancelDate = now.minusHours(1);
+            case THREE_HOURS -> cancelDate = now.plusHours(3);
+            case DAY -> cancelDate = now.plusDays(1);
+            case WEEK -> cancelDate = now.plusWeeks(1);
+            case MONTH -> cancelDate = now.plusMonths(1);
         }
         return cancelDate;
     }
+
+    private ExpirationTime convertToExpirationTime(String time) {
+        ExpirationTime eTime;
+        try {
+            eTime = ExpirationTime.valueOf(time.toUpperCase());
+        } catch(IllegalArgumentException e) {
+            throw new WrongArgumentException("Wrong time argument, try " +
+                    "TEN_MIN, HOUR, THREE_HOURS, DAY, WEEK or MONTH");
+        }
+        return eTime;
+    }
 }
-//    String str = "1986-04-08 12:30";
-//    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-//    LocalDateTime dateTime = LocalDateTime.parse(str, formatter);
-//    Date nowDate = new Date();
-//    Date prevDate = new Date(nowDate.getTime() - 86400000);
-//    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
-//    String nowDay = dateFormat.format(nowDate);
-//    String prevDay = dateFormat.format(prevDate);
